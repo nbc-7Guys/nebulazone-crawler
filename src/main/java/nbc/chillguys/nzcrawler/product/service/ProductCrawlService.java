@@ -33,11 +33,6 @@ public class ProductCrawlService {
 	private final ProductCrawler productCrawler;
 	private final CatalogRepository catalogRepository;
 
-	@PostConstruct
-	public void init() {
-		execute();
-	}
-
 	public void execute() {
 		long startTime = System.currentTimeMillis();
 
