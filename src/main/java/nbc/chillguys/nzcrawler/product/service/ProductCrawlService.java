@@ -36,6 +36,9 @@ public class ProductCrawlService {
 	public void execute() {
 		long startTime = System.currentTimeMillis();
 
+		int maxProductCode = catalogRepository.findMaxProductCode()
+			.orElse(0);
+
 		List<Integer> categories = List.of(CPU, GPU, SSD_M2_NVME, SSD_SATA_2_5_INCH, SSD_M2_SATA);
 		List<ProductPageInfo> productCounts = new ArrayList<>();
 		try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
@@ -82,9 +85,13 @@ public class ProductCrawlService {
 					}
 
 					int categoryCode = products.getFirst().categoryCode();
+					List<ProductInfo> filteredProducts = products.stream()
+						.filter(productInfo -> productInfo.productCode() > maxProductCode)
+						.toList();
+
 					productMap
 						.computeIfAbsent(categoryCode, k -> new ArrayList<>())
-						.addAll(products);
+						.addAll(filteredProducts);
 				} catch (Exception e) {
 					log.error("Future에서 상품 정보 수집 중 예외 발생", e);
 				}
