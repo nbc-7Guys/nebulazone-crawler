@@ -20,6 +20,8 @@ import nbc.chillguys.nzcrawler.product.util.DateUtil;
 @Component
 public class ProductCrawler {
 
+	public static final int PRODUCT_COUNT_PER_PAGE = 150;
+
 	public ProductPageInfo getProductPageInfo(int categoryCode) {
 		try {
 			String url = "https://prod.danawa.com/list/?cate=" + categoryCode;
@@ -82,7 +84,7 @@ public class ProductCrawler {
 				.data("categoryCode", subCategoryCode)
 				.data("priceUnit", "0")
 				.data("sortMethod", "NEW")
-				.data("listCount", "150")
+				.data("listCount", String.valueOf(PRODUCT_COUNT_PER_PAGE))
 				.data("viewMethod", "LIST")
 				.data("physicsCate1", String.valueOf(physicsCate1))
 				.data("physicsCate2", String.valueOf(physicsCate2))

@@ -5,6 +5,7 @@ import static nbc.chillguys.nzcrawler.product.constants.ProductCategory.GPU;
 import static nbc.chillguys.nzcrawler.product.constants.ProductCategory.SSD_M2_NVME;
 import static nbc.chillguys.nzcrawler.product.constants.ProductCategory.SSD_M2_SATA;
 import static nbc.chillguys.nzcrawler.product.constants.ProductCategory.SSD_SATA_2_5_INCH;
+import static nbc.chillguys.nzcrawler.product.crawler.ProductCrawler.*;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -61,7 +62,7 @@ public class ProductCrawlService {
 		try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 			List<Future<List<ProductInfo>>> futures = new ArrayList<>();
 			for (ProductPageInfo countInfo : productCounts) {
-				int loop = countInfo.count() / 150 + 1;
+				int loop = countInfo.count() / PRODUCT_COUNT_PER_PAGE + 1;
 				for (int page = 1; page <= loop; page++) {
 					int finalPage = page;
 
