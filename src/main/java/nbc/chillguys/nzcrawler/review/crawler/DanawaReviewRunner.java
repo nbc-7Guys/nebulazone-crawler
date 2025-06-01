@@ -19,11 +19,11 @@ import nbc.chillguys.nzcrawler.review.service.DanawaReviewService;
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class DanawaStarCommentCrawler implements CommandLineRunner {
+public class DanawaReviewRunner implements CommandLineRunner {
 
 	private static final int BATCH_SIZE = 10;
 	private final CatalogRepository catalogRepository;
-	private final DanawaReviewService danawaReviewService;
+	private final DanawaReviewService reviewService;
 	private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 	private final Semaphore semaphore = new Semaphore(3);
 
@@ -34,20 +34,16 @@ public class DanawaStarCommentCrawler implements CommandLineRunner {
 
 		while (true) {
 			Pageable pageable = PageRequest.of(page, BATCH_SIZE);
-			List<Catalog> catalogs = catalogRepository.findByProductCodeNotNull(pageable);
-			if (catalogs.isEmpty())
-				break;
+			List<Catalog> batch = catalogRepository.findByProductCodeNotNull(pageable);
+			if (batch.isEmpty()) break;
 
-			for (Catalog catalog : catalogs) {
-				if (catalog.getProductCode() == null)
-					continue;
-
+			for (Catalog catalog : batch) {
 				executor.submit(() -> {
 					try {
 						semaphore.acquire();
-						danawaReviewService.crawlAndSaveReview(catalog);
+						reviewService.crawlAndSaveReviews(catalog);
 					} catch (Exception e) {
-						log.error("❌ [{}] 크롤링 실패", catalog.getId(), e);
+						log.error("❌ [{}] 처리 중 오류 발생", catalog.getId(), e);
 					} finally {
 						semaphore.release();
 					}
@@ -59,11 +55,13 @@ public class DanawaStarCommentCrawler implements CommandLineRunner {
 		executor.shutdown();
 		while (!executor.isTerminated()) {
 			try {
-				Thread.sleep(300);
+				Thread.sleep(500);
 			} catch (InterruptedException e) {
 				Thread.currentThread().interrupt();
 			}
 		}
-		log.info("🏁 전체 크롤링 완료 ⏱ {}초", (System.currentTimeMillis() - start) / 1000);
+
+		long end = System.currentTimeMillis();
+		log.info("🏁 전체 리뷰 크롤링 완료 ⏱ 소요 시간: {}초", (end - start) / 1000);
 	}
 }
