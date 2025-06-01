@@ -10,6 +10,10 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
+import com.microsoft.playwright.Browser;
+import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Playwright;
+
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nbc.chillguys.nzcrawler.product.entity.Catalog;
@@ -30,38 +34,55 @@ public class DanawaReviewRunner implements CommandLineRunner {
 	@Override
 	public void run(String... args) {
 		long start = System.currentTimeMillis();
-		int page = 0;
 
-		while (true) {
-			Pageable pageable = PageRequest.of(page, BATCH_SIZE);
-			List<Catalog> batch = catalogRepository.findByProductCodeNotNull(pageable);
-			if (batch.isEmpty()) break;
+		try (Playwright playwright = Playwright.create()) {
+			Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
+				.setHeadless(false)
+				.setArgs(List.of(
+					"--disable-blink-features=AutomationControlled",
+					"--disable-dev-shm-usage",
+					"--disable-infobars",
+					"--no-sandbox",
+					"--disable-extensions",
+					"--start-maximized",
+					"--disable-background-networking",
+					"--disable-default-apps"
+				))
+			);
 
-			for (Catalog catalog : batch) {
-				executor.submit(() -> {
-					try {
-						semaphore.acquire();
-						reviewService.crawlAndSaveReviews(catalog);
-					} catch (Exception e) {
-						log.error("❌ [{}] 처리 중 오류 발생", catalog.getId(), e);
-					} finally {
-						semaphore.release();
-					}
-				});
+			int page = 0;
+			while (true) {
+				Pageable pageable = PageRequest.of(page, BATCH_SIZE);
+				List<Catalog> batch = catalogRepository.findByProductCodeNotNull(pageable);
+				if (batch.isEmpty())
+					break;
+
+				for (Catalog catalog : batch) {
+					executor.submit(() -> {
+						try {
+							semaphore.acquire();
+							reviewService.crawlAndSaveOne(browser, catalog);
+						} catch (Exception e) {
+							log.error("❌ [{}] 처리 중 오류 발생", catalog.getId(), e);
+						} finally {
+							semaphore.release();
+						}
+					});
+				}
+				page++;
 			}
-			page++;
-		}
 
-		executor.shutdown();
-		while (!executor.isTerminated()) {
-			try {
+			executor.shutdown();
+			while (!executor.isTerminated()) {
 				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
 			}
-		}
 
-		long end = System.currentTimeMillis();
-		log.info("🏁 전체 리뷰 크롤링 완료 ⏱ 소요 시간: {}초", (end - start) / 1000);
+			browser.close();
+			long end = System.currentTimeMillis();
+			log.info("🏁 전체 리뷰 크롤링 완료 ⏱ 소요 시간: {}초", (end - start) / 1000);
+
+		} catch (Exception e) {
+			log.error("❌ 전체 크롤링 실패", e);
+		}
 	}
 }
