@@ -28,7 +28,7 @@ public class Review {
 	@Column(nullable = false)
 	private Long catalogId;
 
-	@Column(nullable = false)
+	@Column(nullable = false, columnDefinition = "TEXT")
 	private String content;
 
 	@Column(nullable = false)

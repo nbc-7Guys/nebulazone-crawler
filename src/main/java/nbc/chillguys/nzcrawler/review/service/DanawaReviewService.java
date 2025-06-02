@@ -6,8 +6,8 @@ import org.springframework.stereotype.Service;
 
 import com.microsoft.playwright.Browser;
 import com.microsoft.playwright.BrowserContext;
-import com.microsoft.playwright.Page;
 import com.microsoft.playwright.BrowserType;
+import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
 
 import lombok.RequiredArgsConstructor;
@@ -29,16 +29,18 @@ public class DanawaReviewService {
 	public void crawlAndSaveAll(List<Catalog> catalogs) {
 		try (Playwright playwright = Playwright.create()) {
 			Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
-				.setHeadless(false)
+				.setHeadless(true)
 				.setArgs(List.of(
 					"--disable-blink-features=AutomationControlled",
 					"--disable-dev-shm-usage",
 					"--disable-infobars",
 					"--no-sandbox",
+					"--single-process",
 					"--disable-extensions",
 					"--start-maximized",
 					"--disable-background-networking",
-					"--disable-default-apps"
+					"--disable-default-apps",
+					"--js-flags=--no-expose-wasm,--no-opt"
 				)));
 
 			BrowserContext context = browser.newContext(new Browser.NewContextOptions()
@@ -55,7 +57,8 @@ public class DanawaReviewService {
 
 				for (ReviewInfo info : reviews) {
 					String content = info.content();
-					if (reviewRepository.existsByCatalogIdAndContent(catalog.getId(), content)) continue;
+					if (reviewRepository.existsByCatalogIdAndContent(catalog.getId(), content))
+						continue;
 
 					reviewRepository.save(
 						Review.builder()
