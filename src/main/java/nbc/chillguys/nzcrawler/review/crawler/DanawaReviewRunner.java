@@ -1,90 +1,118 @@
 package nbc.chillguys.nzcrawler.review.crawler;
 
-import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import nbc.chillguys.nzcrawler.product.entity.Catalog;
-import nbc.chillguys.nzcrawler.product.repository.CatalogRepository;
-import nbc.chillguys.nzcrawler.review.service.DanawaReviewService;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Semaphore;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import nbc.chillguys.nzcrawler.product.entity.Catalog;
+import nbc.chillguys.nzcrawler.product.repository.CatalogRepository;
+import nbc.chillguys.nzcrawler.review.service.DanawaReviewService;
 
 @Slf4j
 @Component
 @RequiredArgsConstructor
 public class DanawaReviewRunner implements CommandLineRunner {
 
-	private static final int BATCH_SIZE = 10;
+	private static final int THREAD_COUNT = 2; // ✅ 2개 스레드
+	private static final int MIN_DELAY = 20000; // 20초 (병렬이므로 조금 증가)
+	private static final int MAX_ADDITIONAL_DELAY = 10000; // 10초
+
 	private final CatalogRepository catalogRepository;
 	private final DanawaReviewService reviewService;
 
-	private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
-	private final Semaphore semaphore = new Semaphore(1);
-
 	@Override
 	public void run(String... args) {
-		long startTime = System.currentTimeMillis();
+		long start = System.currentTimeMillis();
 
-		// 기본값 설정
-		int start = 0;
-		int end = Integer.MAX_VALUE;
+		List<Catalog> allCatalogs = getAllCatalogs();
 
-		// 인자 파싱
-		for (String arg : args) {
-			if (arg.startsWith("--start=")) {
-				start = Integer.parseInt(arg.substring("--start=".length()));
-			} else if (arg.startsWith("--end=")) {
-				end = Integer.parseInt(arg.substring("--end=".length()));
-			}
+		// ✅ 360번째부터 시작 (인덱스는 359부터)
+		int startIndex = 359; // 360번째는 인덱스 359
+		if (startIndex >= allCatalogs.size()) {
+			log.warn("⚠️ 시작 인덱스({})가 전체 카탈로그 수({})보다 큽니다.", startIndex, allCatalogs.size());
+			return;
 		}
-		log.info("📦 크롤링 범위: start={} ~ end={}", start, end);
 
-		int page = 0;
-		while (true) {
-			int offset = page * BATCH_SIZE;
-			if (offset > end) break; // end 범위 초과 시 종료
+		List<Catalog> targetCatalogs = allCatalogs.subList(startIndex, allCatalogs.size());
+		ExecutorService executor = Executors.newFixedThreadPool(THREAD_COUNT);
 
-			Pageable pageable = PageRequest.of(page, BATCH_SIZE);
-			List<Catalog> batch = catalogRepository.findByProductCodeNotNull(pageable);
-			if (batch.isEmpty()) break;
+		log.info("🚀 다나와 리뷰 크롤링 시작 (병렬 처리: {}개 스레드, 총 {}개)",
+			THREAD_COUNT, allCatalogs.size());
 
-			// 현재 offset이 start 이전이면 skip
-			if (offset + BATCH_SIZE < start) {
-				page++;
-				continue;
-			}
+		AtomicInteger processedCount = new AtomicInteger(0);
+
+		for (int i = 0; i < targetCatalogs.size(); i++) {
+			Catalog catalog = targetCatalogs.get(i);
+			final int globalIndex = startIndex + i; // 전체 인덱스
 
 			executor.submit(() -> {
 				try {
-					semaphore.acquire();
-					reviewService.crawlAndSaveAll(batch);
+					int threadId = (int)(Thread.currentThread().getId() % THREAD_COUNT);
+					int initialDelay = threadId * 5000;
+					Thread.sleep(initialDelay);
+
+					int delay = MIN_DELAY + (int)(Math.random() * MAX_ADDITIONAL_DELAY);
+					Thread.sleep(delay);
+
+					log.info("🔍 [스레드-{}] 크롤링 시작: {} ({}/{})",
+						threadId, catalog.getProductCode(), globalIndex + 1, allCatalogs.size());
+
+					reviewService.crawlAndSaveSingle(catalog);
+
+					int completed = processedCount.incrementAndGet();
+					log.info("✅ [스레드-{}] 완료: {} (진행률: {}/{}, 전체: {}/{})",
+						threadId, catalog.getProductCode(),
+						completed, targetCatalogs.size(), globalIndex + 1, allCatalogs.size());
+
 				} catch (Exception e) {
-					log.error("❌ 리뷰 저장 중 오류 발생", e);
-				} finally {
-					semaphore.release();
+					log.error("❌ [스레드-{}] 크롤링 실패: {} - {}",
+						Thread.currentThread().getId() % THREAD_COUNT,
+						catalog.getProductCode(), e.getMessage());
+
+					try {
+						Thread.sleep(30000 + (int)(Math.random() * 15000));
+					} catch (InterruptedException ie) {
+						Thread.currentThread().interrupt();
+					}
 				}
 			});
-
-			page++;
 		}
 
 		executor.shutdown();
-		while (!executor.isTerminated()) {
-			try {
-				Thread.sleep(500);
-			} catch (InterruptedException e) {
-				Thread.currentThread().interrupt();
-			}
+		try {
+			executor.awaitTermination(24, TimeUnit.HOURS);
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 
-		long endTime = System.currentTimeMillis();
-		log.info("🏁 전체 리뷰 크롤링 완료 ⏱ 소요 시간: {}초", (endTime - startTime) / 1000);
+		long end = System.currentTimeMillis();
+		log.info("🏁 크롤링 완료 ⏱ {}시간", (end - start) / 1000 / 3600);
 	}
 
+	private List<Catalog> getAllCatalogs() {
+		List<Catalog> allCatalogs = new ArrayList<>();
+		int page = 0;
+
+		while (true) {
+			Pageable pageable = PageRequest.of(page, 100);
+			List<Catalog> batch = catalogRepository.findByProductCodeNotNull(pageable);
+			if (batch.isEmpty())
+				break;
+
+			allCatalogs.addAll(batch);
+			page++;
+		}
+
+		return allCatalogs;
+	}
 }

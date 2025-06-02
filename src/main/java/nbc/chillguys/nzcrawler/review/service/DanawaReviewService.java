@@ -1,6 +1,7 @@
 package nbc.chillguys.nzcrawler.review.service;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 
@@ -9,7 +10,10 @@ import com.microsoft.playwright.BrowserContext;
 import com.microsoft.playwright.BrowserType;
 import com.microsoft.playwright.Page;
 import com.microsoft.playwright.Playwright;
+import com.microsoft.playwright.options.Proxy;
 
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nbc.chillguys.nzcrawler.product.entity.Catalog;
@@ -26,72 +30,87 @@ public class DanawaReviewService {
 	private final DanawaReviewCrawler crawler;
 	private final ReviewRepository reviewRepository;
 
-	public void crawlAndSaveAll(List<Catalog> catalogs) {
+	// ✅ 공유 브라우저 제거 - 각 호출마다 독립적으로 생성
+
+	public void crawlAndSaveSingle(Catalog catalog) {
+		// ✅ 각 호출마다 독립적인 Playwright 인스턴스 생성
 		try (Playwright playwright = Playwright.create()) {
 			Browser browser = playwright.chromium().launch(new BrowserType.LaunchOptions()
 				.setHeadless(true)
+				.setProxy(new Proxy("socks5://127.0.0.1:1080"))
 				.setArgs(List.of(
 					"--disable-blink-features=AutomationControlled",
 					"--disable-dev-shm-usage",
-					"--disable-infobars",
 					"--no-sandbox",
-					"--single-process",
-					"--disable-extensions",
-					"--start-maximized",
-					"--disable-background-networking",
-					"--disable-default-apps",
-					"--js-flags=--no-expose-wasm,--no-opt"
+					"--disable-extensions"
 				)));
 
-			BrowserContext context = browser.newContext(new Browser.NewContextOptions()
+			try (BrowserContext context = browser.newContext(new Browser.NewContextOptions()
 				.setUserAgent(getRandomUserAgent())
-				.setViewportSize(1280, 800)
+				.setViewportSize(1920, 1080)
 				.setLocale("ko-KR")
 				.setTimezoneId("Asia/Seoul")
-			);
+				.setExtraHTTPHeaders(Map.of(
+					"Accept-Language", "ko-KR,ko;q=0.9,en;q=0.8",
+					"Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+				))
+			)) {
 
-			for (Catalog catalog : catalogs) {
 				Page page = context.newPage();
+				page.setDefaultTimeout(60000);
+
 				List<ReviewInfo> reviews = crawler.crawl(page, catalog);
-				int saveCount = 0;
+				saveReviews(catalog, reviews);
 
-				for (ReviewInfo info : reviews) {
-					String content = info.content();
-					if (reviewRepository.existsByCatalogIdAndContent(catalog.getId(), content))
-						continue;
+				// ✅ 대기 시간을 try-catch 밖으로 이동
 
-					reviewRepository.save(
-						Review.builder()
-							.catalogId(catalog.getId())
-							.star(info.star())
-							.content(content)
-							.build()
-					);
-					saveCount++;
-				}
-
-				if (saveCount == 0) {
-					log.info("ℹ️ [{}] 저장할 리뷰 없음", catalog.getId());
-				} else {
-					log.info("✅ [{}] 저장 완료 - {}개", catalog.getId(), saveCount);
-				}
-
-				page.close(); // 페이지는 명시적으로 닫기
+			} finally {
+				browser.close();
 			}
-
-			context.close();
-			browser.close();
-
 		} catch (Exception e) {
-			log.error("❌ 전체 리뷰 저장 중 오류 발생", e);
+			log.error("❌ [{}] 크롤링 실패", catalog.getId(), e);
+			throw new RuntimeException("크롤링 실패", e);
+		}
+
+		// ✅ 브라우저 종료 후 대기 (안전)
+		try {
+			Thread.sleep(2000 + (int)(Math.random() * 3000));
+		} catch (InterruptedException e) {
+			Thread.currentThread().interrupt();
 		}
 	}
 
 	private String getRandomUserAgent() {
 		List<String> agents = List.of(
-			"Mozilla/5.0 (Windows NT 10.0; Win64; x64)...",
-			"Mozilla/5.0 (Macintosh; Intel Mac OS X)..."
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+			"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+			"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Edge/120.0.0.0 Safari/537.36"
 		);
 		return agents.get((int)(Math.random() * agents.size()));
 	}
+
+	private void saveReviews(Catalog catalog, List<ReviewInfo> reviews) {
+		int saveCount = 0;
+		for (ReviewInfo info : reviews) {
+			String content = info.content();
+			if (reviewRepository.existsByCatalogIdAndContent(catalog.getId(), content)) {
+				continue;
+			}
+
+			reviewRepository.save(Review.builder()
+				.catalogId(catalog.getId())
+				.star(info.star())
+				.content(content)
+				.build());
+			saveCount++;
+		}
+
+		if (saveCount == 0) {
+			log.info("ℹ️ [{}] 중복 제외, 저장할 리뷰 없음", catalog.getId());
+		} else {
+			log.info("✅ [{}] 새 리뷰 {}개 저장 완료", catalog.getId(), saveCount);
+		}
+	}
 }
+
