@@ -40,10 +40,10 @@ public class Catalog {
 	private CatalogType type;
 
 	@Column(nullable = false)
-	private LocalDateTime created_at;
+	private LocalDateTime createdAt;
 
 	@Column(nullable = false)
-	private LocalDateTime modified_at;
+	private LocalDateTime modifiedAt;
 
 	@Builder
 	public Catalog(Integer productCode, String name, String description, CatalogType type) {
@@ -51,7 +51,7 @@ public class Catalog {
 		this.name = name;
 		this.description = description;
 		this.type = type;
-		this.created_at = LocalDateTime.now();
-		this.modified_at = LocalDateTime.now();
+		this.createdAt = LocalDateTime.now();
+		this.modifiedAt = LocalDateTime.now();
 	}
 }

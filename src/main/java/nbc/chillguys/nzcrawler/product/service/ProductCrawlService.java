@@ -16,14 +16,15 @@ import java.util.concurrent.Future;
 
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import nbc.chillguys.nzcrawler.product.crawler.ProductCrawler;
 import nbc.chillguys.nzcrawler.product.dto.ProductInfo;
 import nbc.chillguys.nzcrawler.product.dto.ProductPageInfo;
 import nbc.chillguys.nzcrawler.product.entity.Catalog;
+import nbc.chillguys.nzcrawler.product.repository.CatalogEsRepository;
 import nbc.chillguys.nzcrawler.product.repository.CatalogRepository;
+import nbc.chillguys.nzcrawler.product.vo.CatalogDocument;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -32,6 +33,7 @@ public class ProductCrawlService {
 
 	private final ProductCrawler productCrawler;
 	private final CatalogRepository catalogRepository;
+	private final CatalogEsRepository catalogEsRepository;
 
 	public void execute() {
 		long startTime = System.currentTimeMillis();
@@ -103,6 +105,11 @@ public class ProductCrawlService {
 				.map(ProductInfo::toEntity)
 				.toList();
 			catalogRepository.saveAllAndFlush(catalogs);
+
+			List<CatalogDocument> catalogDocuments = catalogs.stream()
+				.map(CatalogDocument::from)
+				.toList();
+			catalogEsRepository.saveAll(catalogDocuments);
 		}
 
 		log.info("총 걸린 시간 {}초", (System.currentTimeMillis() - startTime) / 1000);
