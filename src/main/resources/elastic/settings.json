@@ -27,13 +27,13 @@
       "nori_part_of_speech": {
         "type": "nori_part_of_speech",
         "stoptags": ["E", "J", "IC", "SF", "SE", "SSO", "SSC", "SC", "SY"]
-      },
-      "char_filter": {
-        "slash_to_space": {
-          "type": "pattern_replace",
-          "pattern": "/",
-          "replacement": " "
-        }
+      }
+    },
+    "char_filter": {
+      "slash_to_space": {
+        "type": "pattern_replace",
+        "pattern": "/",
+        "replacement": " "
       }
     }
   }

@@ -1,9 +1,11 @@
 package nbc.chillguys.nzcrawler.product.vo;
 
+import java.time.LocalDateTime;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.springframework.data.annotation.Id;
+import org.springframework.data.elasticsearch.annotations.DateFormat;
 import org.springframework.data.elasticsearch.annotations.Document;
 import org.springframework.data.elasticsearch.annotations.Field;
 import org.springframework.data.elasticsearch.annotations.FieldType;
@@ -30,6 +32,9 @@ public record CatalogDocument(
 
 	@Field(type = FieldType.Keyword)
 	String type,
+
+	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second)
+	LocalDateTime createdAt,
 
 	@Field(type = FieldType.Keyword)
 	String manufacturer,
@@ -73,6 +78,7 @@ public record CatalogDocument(
 			catalog.getName(),
 			catalog.getDescription(),
 			catalog.getType().name(),
+			catalog.getCreatedAt(),
 			manufacturer,
 			chipset,
 			formFactor,
