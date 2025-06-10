@@ -22,10 +22,10 @@ public record CatalogDocument(
 	@Field(type = FieldType.Long)
 	Long catalogId,
 
-	@Field(type = FieldType.Text)
+	@Field(type = FieldType.Text, analyzer = "korean_english")
 	String name,
 
-	@Field(type = FieldType.Text)
+	@Field(type = FieldType.Text, analyzer = "korean_english")
 	String description,
 
 	@Field(type = FieldType.Keyword)
