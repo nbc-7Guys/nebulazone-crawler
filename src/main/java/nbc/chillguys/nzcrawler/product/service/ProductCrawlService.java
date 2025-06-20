@@ -35,72 +35,74 @@ public class ProductCrawlService {
 	private final CatalogRepository catalogRepository;
 	private final CatalogEsRepository catalogEsRepository;
 
+	private static final List<Integer> CATEGORIES = List.of(CPU, GPU, SSD_M2_NVME, SSD_SATA_2_5_INCH, SSD_M2_SATA);
+
 	public void execute() {
 		long startTime = System.currentTimeMillis();
 
-		int maxProductCode = catalogRepository.findMaxProductCode()
-			.orElse(0);
+		int maxProductCode = catalogRepository.findMaxProductCode().orElse(0);
 
-		List<Integer> categories = List.of(CPU, GPU, SSD_M2_NVME, SSD_SATA_2_5_INCH, SSD_M2_SATA);
-		List<ProductPageInfo> productCounts = new ArrayList<>();
+		List<ProductPageInfo> productCounts = fetchProductPageInfos();
+
+		Map<Integer, List<ProductInfo>> productMap = fetchAndFilterProductInfos(productCounts, maxProductCode);
+
+		saveProducts(productMap);
+
+		log.info("카탈로그 크롤링 소요 시간 {}초", (System.currentTimeMillis() - startTime) / 1000);
+	}
+
+	private List<ProductPageInfo> fetchProductPageInfos() {
 		try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
-			List<Future<ProductPageInfo>> futures = new ArrayList<>();
-			for (int categoryCode : categories) {
-				futures.add(executor.submit(() -> productCrawler.getProductPageInfo(categoryCode)));
-			}
+			List<Future<ProductPageInfo>> futures = CATEGORIES.stream()
+				.map(categoryCode -> executor.submit(() -> productCrawler.getProductPageInfo(categoryCode)))
+				.toList();
 
-			for (Future<ProductPageInfo> future : futures) {
-				try {
-					productCounts.add(future.get());
-				} catch (Exception e) {
-					log.error("Future에서 상품 페이지 정보 조회 중 예외 발생", e);
-				}
-			}
+			return collectFutures(futures, "상품 페이지 정보 조회");
 		}
+	}
 
+	private Map<Integer, List<ProductInfo>> fetchAndFilterProductInfos(List<ProductPageInfo> productCounts, int maxProductCode) {
 		Map<Integer, List<ProductInfo>> productMap = new HashMap<>();
 		try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
 			List<Future<List<ProductInfo>>> futures = new ArrayList<>();
-			for (ProductPageInfo countInfo : productCounts) {
-				int loop = countInfo.count() / PRODUCT_COUNT_PER_PAGE + 1;
-				for (int page = 1; page <= loop; page++) {
-					int finalPage = page;
 
-					futures.add(
-						executor.submit(() ->
-							productCrawler.crawlCategoryPage(
-								countInfo.categoryCode(),
-								countInfo.physicsCate1(),
-								countInfo.physicsCate2(),
-								finalPage
-							)
-						)
-					);
+			for (ProductPageInfo countInfo : productCounts) {
+				int pageCount = (countInfo.count() / ProductCrawler.PRODUCT_COUNT_PER_PAGE) + 1;
+				for (int page = 1; page <= pageCount; page++) {
+					final int finalPage = page;
+					futures.add(executor.submit(() ->
+						productCrawler.crawlCategoryPage(
+							countInfo.categoryCode(),
+							countInfo.physicsCate1(),
+							countInfo.physicsCate2(),
+							finalPage
+						)));
 				}
 			}
 
-			for (Future<List<ProductInfo>> future : futures) {
-				try {
-					List<ProductInfo> products = future.get();
-					if (products.isEmpty()) {
-						continue;
-					}
+			List<List<ProductInfo>> allProducts = collectFutures(futures, "상품 정보 수집");
 
+			allProducts.stream()
+				.filter(products -> !products.isEmpty())
+				.forEach(products -> {
 					int categoryCode = products.getFirst().categoryCode();
 					List<ProductInfo> filteredProducts = products.stream()
 						.filter(productInfo -> productInfo.productCode() > maxProductCode)
 						.toList();
-
-					productMap
-						.computeIfAbsent(categoryCode, k -> new ArrayList<>())
+					productMap.computeIfAbsent(categoryCode, k -> new ArrayList<>())
 						.addAll(filteredProducts);
-				} catch (Exception e) {
-					log.error("Future에서 상품 정보 수집 중 예외 발생", e);
-				}
-			}
-		}
+				});
 
+		}
+		return productMap;
+	}
+
+	private void saveProducts(Map<Integer, List<ProductInfo>> productMap) {
 		for (List<ProductInfo> products : productMap.values()) {
+			if (products.isEmpty()) {
+				continue;
+			}
+
 			List<Catalog> catalogs = products.stream()
 				.map(ProductInfo::toEntity)
 				.toList();
@@ -111,7 +113,17 @@ public class ProductCrawlService {
 				.toList();
 			catalogEsRepository.saveAll(catalogDocuments);
 		}
+	}
 
-		log.info("총 걸린 시간 {}초", (System.currentTimeMillis() - startTime) / 1000);
+	private <T> List<T> collectFutures(List<Future<T>> futures, String taskDescription) {
+		List<T> results = new ArrayList<>();
+		for (Future<T> future : futures) {
+			try {
+				results.add(future.get());
+			} catch (Exception e) {
+				log.error("Future에서 {} 중 예외 발생", taskDescription, e);
+			}
+		}
+		return results;
 	}
 }

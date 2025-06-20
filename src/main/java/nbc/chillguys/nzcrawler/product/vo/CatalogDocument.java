@@ -1,8 +1,6 @@
 package nbc.chillguys.nzcrawler.product.vo;
 
 import java.time.LocalDateTime;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.elasticsearch.annotations.DateFormat;
@@ -14,6 +12,7 @@ import org.springframework.data.elasticsearch.annotations.Setting;
 
 import nbc.chillguys.nzcrawler.product.entity.Catalog;
 import nbc.chillguys.nzcrawler.product.entity.CatalogType;
+import nbc.chillguys.nzcrawler.product.util.CatalogExtractUtil;
 
 @Document(indexName = "catalogs")
 @Setting(settingPath = "/elastic/settings.json")
@@ -49,28 +48,19 @@ public record CatalogDocument(
 	String socket
 ) {
 
-	public static final Pattern pattern = Pattern.compile("\\(([^)]+)\\)");
-
 	public static CatalogDocument from(Catalog catalog) {
-		String[] splitName = catalog.getName().split(" ");
-		String[] splitDescription = catalog.getDescription().split("/");
-
 		String manufacturer = null;
 		String chipset = null;
 		String formFactor = null;
 		String socket = null;
+
 		if (catalog.getType() == CatalogType.CPU) {
-			manufacturer = splitName[0].trim();
-			Matcher matcher = pattern.matcher(splitDescription[0].trim());
-			if (matcher.find()) {
-				socket = matcher.group(1);
-			}
-		}
-		if (catalog.getType() == CatalogType.GPU) {
-			chipset = splitDescription[0].trim();
-		}
-		if (catalog.getType() == CatalogType.SSD) {
-			formFactor = splitDescription[0].trim();
+			manufacturer = CatalogExtractUtil.extractFirstWord(catalog.getName());
+			socket = CatalogExtractUtil.extractSocket(catalog.getDescription());
+		} else if (catalog.getType() == CatalogType.GPU) {
+			chipset = CatalogExtractUtil.extractFirstDescriptionPart(catalog.getDescription());
+		} else if (catalog.getType() == CatalogType.SSD) {
+			formFactor = CatalogExtractUtil.extractFirstDescriptionPart(catalog.getDescription());
 		}
 
 		return new CatalogDocument(
@@ -85,5 +75,4 @@ public record CatalogDocument(
 			socket
 		);
 	}
-
 }
