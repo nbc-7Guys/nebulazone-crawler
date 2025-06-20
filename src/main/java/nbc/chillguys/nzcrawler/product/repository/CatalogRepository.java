@@ -16,6 +16,4 @@ public interface CatalogRepository extends JpaRepository<Catalog, Long> {
 
 	@Query("SELECT c FROM Catalog c WHERE c.productCode IS NOT NULL")
 	List<Catalog> findByProductCodeNotNull(Pageable pageable);
-
-	long countByProductCodeNotNull();
 }
