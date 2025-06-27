@@ -16,9 +16,14 @@ spring:
   elasticsearch:
     uris: ${ES_URIS:http://localhost:9200}
 
-  management:
-    endpoints:
-      web:
-        exposure:
-          include:
-            - health
+logging:
+  level:
+    org.hibernate.SQL: off
+    org.hibernate.type.descriptor.sql.BasicBinder: off
+
+crawler:
+  thread:
+    count: 4
+  start:
+    index: 0
+    
