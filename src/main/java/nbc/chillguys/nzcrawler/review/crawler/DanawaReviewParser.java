@@ -25,7 +25,6 @@ public class DanawaReviewParser {
 		return result;
 	}
 
-	// --- 리뷰 파싱/로깅 ---
 	private void parseAndLogReview(List<ReviewInfo> result, ElementHandle item, Long catalogId, int index) {
 		try {
 			String content = extractContent(item);

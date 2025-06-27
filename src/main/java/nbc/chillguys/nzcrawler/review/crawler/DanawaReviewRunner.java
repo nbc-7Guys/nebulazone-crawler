@@ -25,7 +25,6 @@ import com.microsoft.playwright.*;
 @RequiredArgsConstructor
 public class DanawaReviewRunner {
 
-	// --- 환경설정 값 외부화 ---
 	@Value("${crawler.thread.count:3}")
 	private int threadCount;
 
@@ -39,9 +38,6 @@ public class DanawaReviewRunner {
 	private final CatalogRepository catalogRepository;
 	private final DanawaReviewService reviewService;
 
-	/**
-	 * 외부(스케줄러 등)에서 명시적으로 호출할 크롤링 시작 메서드
-	 */
 	public void startCrawlingProcess() {
 		long start = System.currentTimeMillis();
 		List<Catalog> allCatalogs = getAllCatalogs();
@@ -88,7 +84,6 @@ public class DanawaReviewRunner {
 		log.info("🏁 크롤링 전체 완료. 총 소요 시간: {}", formattedDuration);
 	}
 
-	// 개별 카탈로그 크롤링 Job
 	private void submitCrawlingTask(
 		Page page, Catalog catalog, int globalIndex, int totalSize, int targetSize, AtomicInteger processedCount
 	) {
@@ -134,7 +129,6 @@ public class DanawaReviewRunner {
 		}
 	}
 
-	// 전체 Catalog 배치 단위 페이징 조회
 	private List<Catalog> getAllCatalogs() {
 		List<Catalog> allCatalogs = new ArrayList<>();
 		int page = 0;

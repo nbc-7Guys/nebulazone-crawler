@@ -17,18 +17,15 @@ import nbc.chillguys.nzcrawler.product.entity.Catalog;
 @Component
 public class DanawaReviewCrawler {
 
-	// --- 상수 정의 ---
 	private static final String BASE_URL = "https://prod.danawa.com/info/?pcode=";
 	private static final int MAX_RETRY_ATTEMPTS = 3;
-	private static final int MAX_PAGES_TO_CRAWL = 5; // 최대 크롤링할 페이지 수
+	private static final int MAX_PAGES_TO_CRAWL = 5;
 
-	// 선택자(Selectors)
 	private static final String REVIEW_TAB_SELECTOR = "#danawa-prodBlog-productOpinion-button-tab-companyReview";
 	private static final String REVIEW_LIST_SELECTOR = "ul.danawa-prodBlog-companyReview-list";
 	private static final String REVIEW_ITEM_SELECTOR = "li.danawa-prodBlog-companyReview-clazz-more";
 	private static final String NEXT_PAGE_BUTTON_SELECTOR = ".pagination .page_next";
 
-	// 타임아웃(Timeouts)
 	private static final int NAVIGATION_TIMEOUT = 60000;
 	private static final int DEFAULT_WAIT_TIMEOUT = 15000;
 	private static final int RETRY_DELAY_BASE = 10000;
@@ -126,7 +123,6 @@ public class DanawaReviewCrawler {
 	}
 
 	private void addStealthInitScript(Page page) {
-		// (내용 동일)
 		page.addInitScript("""
             Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
             Object.defineProperty(navigator, 'plugins', {get: () => [1, 2, 3, 4, 5]});

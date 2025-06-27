@@ -57,9 +57,7 @@ public class DanawaReviewService {
 			.collect(Collectors.toList());
 
 		if (!newReviews.isEmpty()) {
-			// 1. DB에 먼저 저장
 			reviewRepository.saveAll(newReviews);
-			// 2. ES에도 저장
 			List<ReviewDocument> esDocs = newReviews.stream()
 				.map(ReviewDocument::from)
 				.collect(Collectors.toList());

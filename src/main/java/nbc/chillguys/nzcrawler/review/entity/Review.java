@@ -41,7 +41,6 @@ public class Review {
 		this.content = content;
 	}
 
-	// ReviewInfo(레코드) → Review(엔티티) 변환 (시간은 JPA가 관리)
 	public static Review from(ReviewInfo info) {
 		return Review.builder()
 			.star(info.star())

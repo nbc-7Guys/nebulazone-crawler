@@ -23,7 +23,7 @@ public record ReviewDocument(
 	@Field(type = FieldType.Integer)
 	Integer star,
 
-	@Field(type = FieldType.Text, analyzer = "korean_english") // 한영 분석기 등 커스텀 가능
+	@Field(type = FieldType.Text, analyzer = "korean_english")
 	String content,
 
 	@Field(type = FieldType.Date, format = DateFormat.date_hour_minute_second)
