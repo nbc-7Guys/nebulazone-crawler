@@ -15,3 +15,10 @@ spring:
 
   elasticsearch:
     uris: ${ES_URIS:http://localhost:9200}
+
+  management:
+    endpoints:
+      web:
+        exposure:
+          include:
+            - health
